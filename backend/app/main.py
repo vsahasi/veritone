@@ -5,12 +5,14 @@ from fastapi import FastAPI
 from app.config import settings
 from app.db.init_db import init_db
 from app.api.ingest import router as ingest_router
+from app.api.analysis import router as analysis_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     settings.get_upload_path().mkdir(parents=True, exist_ok=True)
+    settings.get_work_path().mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -21,6 +23,7 @@ app = FastAPI(
 )
 
 app.include_router(ingest_router, prefix="/api/v1")
+app.include_router(analysis_router, prefix="/api/v1")
 
 
 @app.get("/health")

@@ -31,7 +31,7 @@ async def ingest_from_file(
         source=filename,
         duration_seconds=None,
         status="ingested",
-        metadata_={"source_type": "upload", "filename": filename},
+        metadata_={"source_type": "upload", "filename": filename, "extension": ext},
     )
     db.add(video)
     await db.flush()
@@ -73,7 +73,7 @@ async def ingest_from_url(db: AsyncSession, url: str) -> Video:
         source=url,
         duration_seconds=None,
         status="ingested",
-        metadata_={"source_type": "url", "url": url},
+        metadata_={"source_type": "url", "url": url, "extension": ext},
     )
     db.add(video)
     await db.flush()

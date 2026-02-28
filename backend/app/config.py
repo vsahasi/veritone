@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     s3_bucket: str = "veritone"
 
+    # Processing (Phase 2a)
+    whisper_model: str = "base"
+    work_dir: str = "./tmp"
+
     def get_upload_path(self) -> Path:
         return Path(self.upload_dir)
 
@@ -37,6 +41,9 @@ class Settings(BaseSettings):
         path = Path(self.sqlite_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite+aiosqlite:///{path.absolute()}"
+
+    def get_work_path(self) -> Path:
+        return Path(self.work_dir)
 
 
 settings = Settings()

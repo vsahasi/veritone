@@ -63,3 +63,29 @@ def get_video_path(video_id: str, extension: str = ".mp4") -> str:
     if settings.storage_type == "minio":
         return get_video_path_minio(video_id, extension)
     return get_video_path_local(video_id, extension)
+
+
+def get_video_local_path_for_processing(video_id: str, extension: str) -> Path:
+    """Return a local Path that FFmpeg can read. For MinIO, downloads to work_dir."""
+    if settings.storage_type == "minio":
+        import boto3
+        from botocore.config import Config
+
+        work = settings.get_work_path()
+        work.mkdir(parents=True, exist_ok=True)
+        dest = work / f"{video_id}{extension}"
+        client = boto3.client(
+            "s3",
+            endpoint_url=settings.minio_endpoint,
+            aws_access_key_id=settings.minio_access_key,
+            aws_secret_access_key=settings.minio_secret_key,
+            config=Config(signature_version="s3v4"),
+            region_name="us-east-1",
+        )
+        key = f"videos/{video_id}{extension}"
+        client.download_file(settings.minio_bucket, key, str(dest))
+        return dest
+    path = settings.get_upload_path() / f"{video_id}{extension}"
+    if not path.exists():
+        raise FileNotFoundError(f"Video file not found: {path}")
+    return path

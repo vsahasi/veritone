@@ -27,10 +27,15 @@ docker compose up --build
 
 With default `STORAGE_TYPE=local`, only the API container runs. Set `STORAGE_TYPE=minio` and use the included MinIO service for S3-compatible storage.
 
-## Phase 1 (current)
+## API (Phase 1 + 2a)
 
 - `GET /health` — health check
-- `POST /ingest` — upload a video file (multipart) or submit a URL (JSON `{"url": "..."}`) to ingest; returns `video_id` and status.
+- `POST /api/v1/ingest` — upload a video file (multipart); returns `video_id` and status
+- `POST /api/v1/ingest/url` — ingest from URL (JSON `{"url": "..."}`)
+- `POST /api/v1/videos/{video_id}/transcribe` — run FFmpeg + Whisper; returns utterance count and status
+- `GET /api/v1/analysis/{video_id}` — return transcript (list of utterances with start_ts, end_ts, text)
+
+Set `WHISPER_MODEL` (e.g. `base`, `small`, `large-v3`) and `WORK_DIR` (temp dir for WAVs) in `.env` if needed.
 
 ## Push to GitHub
 
