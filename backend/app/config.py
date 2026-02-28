@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     whisper_model: str = "base"
     work_dir: str = "./tmp"
 
+    # RAG (Phase 4)
+    embedding_model: str = "all-MiniLM-L6-v2"  # sentence-transformers model name
+
     def get_upload_path(self) -> Path:
         return Path(self.upload_dir)
 

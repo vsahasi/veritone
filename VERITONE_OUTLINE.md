@@ -49,7 +49,7 @@ Video input (MP4/WebM or YouTube URL) is accepted via FastAPI. FFmpeg will handl
 
 ### Layer 2: Modality Processing (Three Streams)
 
-**Stream A — Semantic (text):** Whisper (large-v3) for speaker-diarized transcription; utterance-level segments with timestamps; embeddings (OpenAI text-embedding-3-small or e5-large-v2) stored for RAG; LLM-based sentiment per utterance (`positive`, `negative`, `neutral`, `hedging`, `deflecting`); optional claim-density detection.
+**Stream A — Semantic (text):** faster-whisper (e.g. large-v3) for speaker-diarized transcription; utterance-level segments with timestamps; embeddings (OpenAI text-embedding-3-small or e5-large-v2) stored for RAG; LLM-based sentiment per utterance (`positive`, `negative`, `neutral`, `hedging`, `deflecting`); optional claim-density detection.
 
 **Stream B — Vocal biomarkers (audio):** Wav2Vec 2.0 fine-tuned on emotion or an off-the-shelf emotion model (e.g. SpeechBrain) for the demo; per-utterance features (F0, jitter, shimmer, speech rate, pause duration, energy contour); vocal stress index from deviation to a rolling speaker baseline (per-call median F0/speech rate or optional manual calm segment); vocal affect labels: `confident`, `stressed`, `monotone`, `animated`, `hesitant`.
 
@@ -86,10 +86,10 @@ React + Tailwind: video player with synced transcript and divergence overlay, pe
 | Phase | Duration | Output | Notes |
 |-------|----------|--------|--------|
 | 1. Pipeline scaffolding | 3 days | FastAPI skeleton, Docker, storage (MinIO/SQLite), ingestion endpoint | **Done.** Local + MinIO storage; SQLite for metadata. |
-| 2. Modality processors | 5–6 days | Whisper → transcript; emotion model → vocal; MediaPipe + FER → facial; per-utterance JSON | Transcript first, then vocal, then facial; off-the-shelf emotion model for demo. |
-| 3. Divergence engine | 2 days | Rule-based score + flags; timeline generation | Shared-embedding option later. |
-| 4. RAG layer | 2–3 days | Embedding pipeline, FAISS/Pinecone index, query endpoint with LLM | Single-video first; schema ready for cross-video. |
-| 5. Frontend | 4 days | React dashboard: video player, timeline, RAG chat | Timeline and transcript first, then chat. |
+| 2. Modality processors | 5–6 days | Whisper → transcript; emotion model → vocal; MediaPipe + FER → facial; per-utterance JSON | Transcript (2a) and vocal (2b: SpeechBrain) done; facial pending. |
+| 3. Divergence engine | 2 days | Rule-based score + flags; timeline generation | **Done (2b).** Two-way semantic vs vocal; timeline endpoint. Shared-embedding later. |
+| 4. RAG layer | 2–3 days | Embedding pipeline, FAISS/Pinecone index, query endpoint with LLM | **Done.** sentence-transformers + FAISS, POST /query with citations; LLM synthesis optional later. |
+| 5. Frontend | 4 days | React dashboard: video player, timeline, RAG chat | **Done (MVP).** Vite + React + Tailwind; ingest, pipeline, transcript, divergence timeline, query panel. |
 | 6. Demo data + polish | 3 days | 3–5 (or 10–15) public videos, scripted demo narrative, README, demo video | Videos chosen for clear divergence moments. |
 
 **Total:** ~3 weeks for full system; ~2 weeks for MVP 1.
@@ -106,7 +106,7 @@ Public sources: earnings calls (YouTube — e.g. Apple, Tesla), congressional te
 
 - **Repo:** README with problem, approach (three modalities → divergence), architecture, demo link, Limitations & ethics.
 - **Demo video:** 2–3 minutes — upload clip, show timeline with one clear divergence spike, run one RAG query, show result with timestamp.
-- **Tech stack:** Python (FastAPI, Whisper, PyTorch), React, vector search (FAISS/Pinecone), Docker.
+- **Tech stack:** Python (FastAPI, faster-whisper, PyTorch/ctranslate2), React, vector search (FAISS/Pinecone), Docker.
 
 ---
 

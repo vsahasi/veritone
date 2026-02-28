@@ -19,6 +19,16 @@ uvicorn app.main:app --reload
 API: http://localhost:8000  
 Docs: http://localhost:8000/docs
 
+**Frontend dashboard (React + Tailwind):**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Dashboard: http://localhost:3000 (proxies API to backend; run backend on port 8000).
+
 **Docker (API + optional MinIO):**
 
 ```bash
@@ -27,15 +37,21 @@ docker compose up --build
 
 With default `STORAGE_TYPE=local`, only the API container runs. Set `STORAGE_TYPE=minio` and use the included MinIO service for S3-compatible storage.
 
-## API (Phase 1 + 2a)
+## API (Phase 1 + 2a + 2b + 4)
 
 - `GET /health` — health check
 - `POST /api/v1/ingest` — upload a video file (multipart); returns `video_id` and status
 - `POST /api/v1/ingest/url` — ingest from URL (JSON `{"url": "..."}`)
-- `POST /api/v1/videos/{video_id}/transcribe` — run FFmpeg + Whisper; returns utterance count and status
-- `GET /api/v1/analysis/{video_id}` — return transcript (list of utterances with start_ts, end_ts, text)
+- `POST /api/v1/videos/{video_id}/transcribe` — run FFmpeg + faster-whisper; returns utterance count and status
+- `POST /api/v1/videos/{video_id}/process-vocal` — run vocal emotion model (SpeechBrain) per utterance; requires transcript
+- `POST /api/v1/videos/{video_id}/compute-divergence` — compute two-way divergence (semantic vs vocal)
+- `GET /api/v1/analysis/{video_id}` — full analysis (transcript + vocal labels + divergence when available)
+- `GET /api/v1/timeline/{video_id}` — divergence timeline (for UI overlay)
+- `POST /api/v1/query` — natural-language search over transcripts (RAG). Body: `{"query": "...", "video_id": "optional", "limit": 10, "rebuild": false}`. Builds FAISS index on first use or when `rebuild=true`.
 
-Set `WHISPER_MODEL` (e.g. `base`, `small`, `large-v3`) and `WORK_DIR` (temp dir for WAVs) in `.env` if needed.
+**Pipeline order:** ingest → transcribe → process-vocal → compute-divergence. Then use `GET /analysis`, `GET /timeline`, or `POST /query`.
+
+Set `WHISPER_MODEL`, `WORK_DIR`, and `EMBEDDING_MODEL` (e.g. `all-MiniLM-L6-v2`) in `.env` if needed. RAG uses **sentence-transformers** + **FAISS** (local, no API key).
 
 ## Push to GitHub
 

@@ -33,10 +33,10 @@
 
 ## 3. Whisper Transcription
 
-- **Library:** `openai-whisper` or `faster-whisper` (faster, less memory; good for local/demo). Add to `requirements.txt`.
-- **Model:** `base` or `small` for fast iteration; `large-v3` for best quality (heavier). Make model configurable via env (e.g. `WHISPER_MODEL=base`).
+- **Library:** `faster-whisper` (no LLVM/numba build; faster and less memory than openai-whisper). In `requirements.txt`.
+- **Model:** `base` or `small` for fast iteration; `large-v3` for best quality (heavier). Configurable via env `WHISPER_MODEL=base`.
 - **Input:** Path to 16 kHz mono WAV.
-- **Output:** List of segments: `{start, end, text}`. Whisper returns these natively. Map to Utterance rows (video_id, speaker_id="default", start_ts, end_ts, text).
+- **Output:** List of segments: `{start, end, text}`. Map to Utterance rows (video_id, speaker_id="default", start_ts, end_ts, text).
 - **Failure:** On exception, set Video status to `transcript_failed` (or keep `ingested`), log error, return partial or error in API.
 
 ---
@@ -77,7 +77,7 @@
 
 ## 7. Dependencies
 
-- `openai-whisper` or `faster-whisper` (and `ctranslate2` if using faster-whisper).
+- `faster-whisper` (pulls in ctranslate2; no OpenAI API key or LLVM required).
 - FFmpeg must be available (already in Dockerfile). No new system deps if using existing image.
 
 ---

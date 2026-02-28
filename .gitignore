@@ -9,9 +9,12 @@ venv
 uploads/
 tmp/
 data/*.db
+backend/data/*.db
 *.pyc
 .pytest_cache
 .coverage
 htmlcov/
 dist/
 *.egg-info/
+frontend/node_modules/
+frontend/dist/

@@ -37,3 +37,38 @@ def extract_audio_to_wav(video_path: Path, output_wav_path: Path | None = None) 
         capture_output=True,
     )
     return output_wav_path
+
+
+def extract_audio_segment(
+    wav_path: Path, start_ts: float, end_ts: float, output_path: Path | None = None
+) -> Path:
+    """
+    Extract a segment [start_ts, end_ts] from a WAV file. Returns path to segment WAV.
+    """
+    duration = end_ts - start_ts
+    if duration <= 0:
+        raise ValueError("Segment duration must be positive")
+    if output_path is None:
+        work = settings.get_work_path()
+        work.mkdir(parents=True, exist_ok=True)
+        output_path = work / f"seg_{wav_path.stem}_{start_ts:.1f}_{end_ts:.1f}.wav"
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(wav_path),
+            "-ss",
+            str(start_ts),
+            "-t",
+            str(duration),
+            "-acodec",
+            "copy",
+            str(output_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return output_path
