@@ -35,7 +35,7 @@ export function AppShell() {
             className="text-[16px] font-semibold text-[var(--text-primary)]"
             style={{ letterSpacing: "-0.02em" }}
           >
-            VeriTone
+            veritone
           </span>
         </div>
 
