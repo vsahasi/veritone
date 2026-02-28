@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - UPLOAD_DIR=/data/uploads
+      - SQLITE_PATH=/data/veritone.db
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=${MINIO_BUCKET:-veritone}
+    volumes:
+      - veritone_data:/data
+    env_file:
+      - .env
+    profiles:
+      - default
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    ports:
+      - "9000:9000"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    profiles:
+      - minio
+
+volumes:
+  veritone_data:
+  minio_data:
