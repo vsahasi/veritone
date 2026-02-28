@@ -10,34 +10,24 @@ A platform that ingests video of public-facing communications — earnings calls
 
 The key insight: when these three signals disagree, something interesting is happening. A CEO saying "We're extremely confident in Q3 guidance" while their vocal pitch rises and their blink rate doubles is a meaningful data point. No tool on the market surfaces this divergence in a structured, queryable way.
 
-**Positioning one-liner:** VeriTone turns video into a **queryable credibility timeline** — the same interface for earnings calls, testimony, and pitches.
+**Positioning:** VeriTone turns video into a **queryable credibility timeline** — the same interface for earnings calls, testimony, and pitches.
 
 ---
 
 ## Why This Is Niche and Commercially Viable
 
-- **The gap:** Bloomberg Terminal gives you transcript sentiment. Zoom gives you call recordings. Nobody stitches together audio emotion, facial micro-expression, and semantic analysis into a single divergence timeline that an analyst can query with natural language.
-- **Who would pay:**
-  - Quantitative hedge funds — alternative data for earnings season (real, massive market)
-  - Investigative journalists — analyzing political testimony for inconsistencies
-  - HR/recruiting platforms — structured interview analysis (huge TAM; ethically navigable if consent-based)
-  - Due diligence firms — analyzing founder pitches before investment decisions
-  - Academic researchers — communication studies, political science, psychology
+- **The gap:** Bloomberg Terminal gives transcript sentiment; Zoom gives call recordings. VeriTone stitches together audio emotion, facial micro-expression, and semantic analysis into a single divergence timeline that an analyst can query with natural language.
+- **Target users:** Quantitative hedge funds (alternative data for earnings), investigative journalists (political testimony), HR/recruiting platforms (consent-based interview analysis), due diligence firms (founder pitches), academic researchers (communication and political science).
 
-**Monetization paths:**
-
-- **API-as-a-service** — charge per video-minute analyzed (e.g. $0.50–2.00/min for hedge funds). Consider a **free tier** (e.g. 10 min/month) for journalists and academics to drive adoption and case studies.
-- **SaaS dashboard** — monthly subscription for journalism orgs, recruiting teams
-- **Data feed** — sell structured divergence data on public earnings calls as alternative data to quant funds (venture-backable; position as **future monetization** while the resume project focuses on platform + API + dashboard)
-- **White-label** — license the engine to existing platforms (Bloomberg, Zoom, BrightHire)
+**Monetization paths:** API-as-a-service (per video-minute pricing; optional free tier for journalists/academics), SaaS dashboard, data feed on public earnings (alternative data for quant funds), white-label licensing to existing platforms (Bloomberg, Zoom, BrightHire).
 
 ---
 
 ## Data and Ethics
 
-- **Consent:** For non-public content (e.g. HR/recruiting), analysis only with **explicit consent** and disclosed use. State this clearly in README and public materials.
-- **Bias and limitations:** FER and vocal-stress models can exhibit demographic and cultural bias. Include a **Limitations** section in product and docs: *"Emotion and stress signals may vary by culture and individual; use as one input to human judgment, not as the sole basis for decisions."*
-- **Demo data:** Use only public-domain or clearly licensed sources. Pre-load **3–5 videos with known 'divergence moments'** (e.g. a tough Q&A segment) so the demo narrative is obvious; optionally expand to 10–15 for breadth.
+- **Consent:** For non-public content (e.g. HR/recruiting), analysis is limited to explicit consent and disclosed use; this is stated in the README and public materials.
+- **Limitations:** FER and vocal-stress models can exhibit demographic and cultural bias. The product and docs include a Limitations section: emotion and stress signals may vary by culture and individual and are intended as one input to human judgment, not the sole basis for decisions.
+- **Demo data:** Public-domain or clearly licensed sources only. The core demo uses 3–5 videos with known divergence moments (e.g. a tough Q&A); the set can be expanded to 10–15 for breadth.
 
 ---
 
@@ -45,173 +35,87 @@ The key insight: when these three signals disagree, something interesting is hap
 
 ### Core Data Schema
 
-Define early to keep ingestion, divergence, and RAG aligned:
+The schema keeps ingestion, divergence, and RAG aligned:
 
 - **Video** — `id`, `source` (url/path), `duration`, `created_at`, `metadata` (source, date, speaker_ids).
 - **Utterance** — `id`, `video_id`, `speaker_id`, `start_ts`, `end_ts`, `text`, `embedding_id` (for RAG).
-- **ModalityScores** — per utterance: `semantic_label`, `semantic_confidence`, `vocal_label`, `vocal_confidence`, `facial_label`, `facial_confidence` (or N/A if modality failed).
+- **ModalityScores** — per utterance: `semantic_label`, `semantic_confidence`, `vocal_label`, `vocal_confidence`, `facial_label`, `facial_confidence` (or N/A if a modality failed).
 - **DivergenceScore** — `utterance_id`, `score` (0–1), `flags[]` (e.g. "verbal-somatic mismatch on forward-looking claim").
-- **Storage:** PostgreSQL (or SQLite for local demo) for relational data; vector DB (FAISS or Pinecone) for utterance embeddings. Support **partial results** (e.g. semantic + vocal only when face is off-camera).
+- **Storage:** PostgreSQL or SQLite (local demo) for relational data; vector DB (FAISS or Pinecone) for utterance embeddings. Partial results are supported (e.g. semantic + vocal only when face is off-camera).
 
 ### Layer 1: Ingestion Pipeline
 
-```
-Video Input (MP4/WebM/YouTube URL)
-       │
-       ├──► FFmpeg → Audio extraction (WAV, 16kHz mono)
-       ├──► FFmpeg → Frame extraction (2 FPS for facial analysis; optional 5–10 FPS "high-sensitivity" mode for short segments later)
-       └──► Metadata tagging (source, date, speaker ID)
-```
-
-- **FastAPI:** `POST /ingest` accepts video file or URL.
-- **yt-dlp** for YouTube/public video ingestion.
-- **Storage:** S3 or **MinIO locally** for raw assets; **PostgreSQL or SQLite** for metadata (SQLite reduces setup friction for local/demo).
+Video input (MP4/WebM or YouTube URL) is accepted via FastAPI. FFmpeg will handle audio extraction (WAV, 16kHz mono) and frame extraction (2 FPS for facial analysis; optional 5–10 FPS high-sensitivity mode for short segments). Raw assets are stored in S3 or MinIO locally; metadata in PostgreSQL or SQLite. yt-dlp is used for YouTube/public video ingestion. **Status:** Implemented — `POST /ingest` (file and URL), storage abstraction (local + MinIO), SQLite, Docker.
 
 ### Layer 2: Modality Processing (Three Streams)
 
-**Stream A — Semantic (text)**
+**Stream A — Semantic (text):** Whisper (large-v3) for speaker-diarized transcription; utterance-level segments with timestamps; embeddings (OpenAI text-embedding-3-small or e5-large-v2) stored for RAG; LLM-based sentiment per utterance (`positive`, `negative`, `neutral`, `hedging`, `deflecting`); optional claim-density detection.
 
-- Whisper (large-v3) for speaker-diarized transcription.
-- Chunk into utterance-level segments with timestamps.
-- Embeddings: OpenAI text-embedding-3-small or open-source e5-large-v2; store in FAISS or Pinecone for RAG.
-- LLM-based sentiment per utterance: `{positive, negative, neutral, hedging, deflecting}`.
-- Optional: claim density — flag factual assertions vs vague language.
+**Stream B — Vocal biomarkers (audio):** Wav2Vec 2.0 fine-tuned on emotion or an off-the-shelf emotion model (e.g. SpeechBrain) for the demo; per-utterance features (F0, jitter, shimmer, speech rate, pause duration, energy contour); vocal stress index from deviation to a rolling speaker baseline (per-call median F0/speech rate or optional manual calm segment); vocal affect labels: `confident`, `stressed`, `monotone`, `animated`, `hesitant`.
 
-**Stream B — Vocal biomarkers (audio)**
+**Stream C — Facial / gestural (video):** MediaPipe Face Mesh (468 landmarks); per-frame metrics (blink rate, lip compression, brow position, gaze direction, head movement velocity); lightweight micro-expression classifier (e.g. FER2013 + AffectNet); utterance-level aggregate: `congruent`, `incongruent`, `neutral`; self-soothing gestures as stress indicators. Frame rate: 2 FPS for MVP; optional 5–10 FPS high-sensitivity mode for short segments.
 
-- Use **Wav2Vec 2.0** fine-tuned on emotion, or an **off-the-shelf** emotion model (e.g. SpeechBrain) for the demo; note "custom fine-tuning" as a roadmap item.
-- Per-utterance features: F0, jitter, shimmer, speech rate, pause duration, energy contour.
-- **Vocal stress index:** deviation from speaker baseline. **Baseline strategy:** avoid "first 60 seconds only" (often nervous). Use **rolling baseline** (e.g. per-call median F0 and speech rate) or optional manual "calm" segment; document in README.
-- Classify vocal affect: `{confident, stressed, monotone, animated, hesitant}`.
+### Layer 3: Divergence Engine
 
-**Stream C — Facial / gestural (video)**
-
-- MediaPipe Face Mesh (468 landmarks).
-- Per-frame: blink rate, lip compression, brow position, gaze direction, head movement velocity.
-- Lightweight classifier (e.g. fine-tuned on FER2013 + AffectNet) for micro-expressions.
-- Aggregate to utterance-level: `{congruent, incongruent, neutral}`; self-soothing gestures (face touching, lip biting) as stress indicators.
-- **2 FPS** is sufficient for MVP; add optional **high-sensitivity** mode (5–10 FPS) for short segments if needed for demo.
-
-### Layer 3: Divergence Engine (The Secret Sauce)
-
-For each utterance, three signal vectors are combined into a **divergence score** and flags.
-
-**Important:** Semantic, vocal, and facial outputs live in different spaces (embeddings vs acoustic features vs categorical labels). Two approaches:
-
-1. **Rule-based + aggregate score (recommended for MVP):** Define divergence as rules and thresholds, e.g. "semantic = positive AND vocal = stressed AND facial = incongruent → high divergence." Compute a normalized aggregate (e.g. weighted sum of pairwise mismatches) to get a 0–1 score. Easier to ship and explain.
-2. **Shared embedding (roadmap):** Map all three modalities into one embedding space (e.g. projection heads), then use pairwise cosine distance between the three vectors. More scalable and research-oriented; add after MVP.
-
-**Example output:**
-
-```
-Utterance #47: "We see no material risk to our supply chain."
-  Semantic:  positive (0.89)
-  Vocal:     stressed (F0 +22% from baseline, pause before "no")
-  Facial:    incongruent (lip compression, gaze aversion)
-
-  → Divergence Score: 0.78 / 1.00 (HIGH)
-  → Flag: "Verbal-somatic mismatch on forward-looking claim"
-```
-
-- **Timeline:** Users scrub through video and see divergence spikes overlaid on the transcript — like a seismograph for credibility.
+For each utterance, the three modality signals are combined into a divergence score (0–1) and flags. Because semantic, vocal, and facial outputs live in different spaces, the MVP uses a **rule-based + aggregate score** (e.g. semantic positive + vocal stressed + facial incongruent → high divergence; normalized weighted sum of pairwise mismatches). A **shared-embedding** approach (projection into one space, pairwise cosine distance) is on the roadmap for later. The UI presents a timeline where users scrub through the video and see divergence spikes overlaid on the transcript.
 
 ### Layer 4: RAG-Powered Query Interface
 
-- All utterances, modality scores, and divergence flags are embedded and stored.
-- **Schema for cross-video:** Store `(video_id, speaker_id, quarter_or_segment)` (or topic tags) so queries like "Compare CEO body language when discussing Q2 vs Q3" can retrieve and align across videos. Design this into the index from the start.
-- **MVP scope:** Prioritize **single-video** natural language queries; add cross-video compare in a later phase.
-- Example queries:
-  - "Show me every time the CFO discussed margins with high vocal stress"
-  - "Compare the CEO's body language when discussing Q2 vs Q3 guidance" (when cross-video is supported)
-  - "Find all high-divergence moments in the last 5 earnings calls from this company"
-- LLM retrieves via vector search, then synthesizes an analytical summary with **citations** (timestamp links back to the video).
+Utterances, modality scores, and divergence flags are embedded and stored. The index schema supports cross-video queries (e.g. `video_id`, `speaker_id`, segment/topic) for questions like "Compare CEO body language when discussing Q2 vs Q3." MVP focuses on single-video natural language queries; cross-video compare is a later phase. The LLM retrieves via vector search and returns an analytical summary with timestamp citations back to the video.
 
 ### Layer 5: API and Deployment
 
-**Endpoints (document request/response shapes early; e.g. OpenAPI sketch):**
-
-- `POST /ingest` — submit video (file or URL); return `video_id`, status.
-- `GET /analysis/{video_id}` — full multimodal report (including partial results when a modality fails).
-- `POST /query` — RAG natural language search (query string, optional filters, limit).
-- `GET /timeline/{video_id}` — divergence timeline data.
-- `GET /compare` — cross-video speaker comparison (post-MVP).
-
-**Failure modes and partial results:**
-
-- If Whisper fails (bad audio): return error or partial transcript; do not block other modalities.
-- If face is off-camera or detector fails: run semantic + vocal only; surface **"Facial: N/A"** in API and UI so the product degrades gracefully.
-
-**Deployment:**
-
-- Docker (multi-stage: inference container + API container).
-- AWS (EC2 GPU for inference, ECS for API, S3) or Modal/Replicate for serverless GPU.
-- Auth: API keys + JWT for web dashboard.
+**Endpoints:** `POST /ingest` (video file or URL), `GET /analysis/{video_id}` (full report, including partial results when a modality fails), `POST /query` (RAG search), `GET /timeline/{video_id}`, `GET /compare` (cross-video; post-MVP). Failure handling: Whisper failures do not block other modalities; missing face yields semantic + vocal only with "Facial: N/A" in API and UI. Deployment: Docker (multi-stage inference + API), with options for AWS (EC2 GPU, ECS, S3) or Modal/Replicate; auth via API keys + JWT for the web dashboard.
 
 ### Layer 6: Frontend Dashboard
 
-- **Stack:** React + Tailwind.
-- Video player with synced transcript, divergence overlay, and per-modality breakdown.
-- Clickable divergence spikes that jump to the video timestamp.
-- Side panel: RAG chat for natural language queries.
-- Comparative view (same speaker across multiple appearances) — post-MVP.
-- Export to PDF report (for due diligence).
+React + Tailwind: video player with synced transcript and divergence overlay, per-modality breakdown, clickable divergence spikes (jump to timestamp), RAG chat side panel, comparative view (same speaker across appearances) post-MVP, and PDF export for due diligence.
 
 ---
 
-## Build Plan (with Claude Code + Cursor)
+## Build Plan
 
-**MVP phasing (recommended):**
+**MVP phasing:**
 
-- **MVP 1 (resume demo):** Ingestion (file + one YouTube) → transcript + **one non-text modality** (e.g. vocal only) → **two-way divergence** (semantic vs vocal) → timeline + one RAG query type. Already a strong differentiator.
-- **MVP 2:** Add facial stream and **three-way divergence**.
+- **MVP 1 (resume demo):** Ingestion (file + YouTube) → transcript + one non-text modality (e.g. vocal) → two-way divergence (semantic vs vocal) → timeline + one RAG query type.
+- **MVP 2:** Facial stream + three-way divergence.
 - **MVP 3:** Multi-video compare, export, polish.
 
-**Phase breakdown:**
+**Phases:**
 
-| Phase | Duration | Tools | Output | Notes |
-|-------|----------|--------|--------|--------|
-| 1. Pipeline scaffolding | 3 days | Claude Code | FastAPI skeleton, Docker setup, MinIO/S3 + Postgres or SQLite, ingestion endpoint | Use MinIO + SQLite for local demo to reduce setup friction. |
-| 2. Modality processors | 5–6 days | Claude Code + Cursor | Whisper → transcript (1–2 d); Wav2Vec/off-the-shelf emotion → vocal (2 d); MediaPipe + FER → facial (2 d). Each outputs per-utterance JSON. | Order: transcript first, then vocal, then facial. Use off-the-shelf emotion model if no custom Wav2Vec yet. |
-| 3. Divergence engine | 2 days | Claude Code | Rule-based score + flags; timeline generation. | Use rule-based divergence first; add shared-embedding option later if needed. |
-| 4. RAG layer | 2–3 days | Claude Code | Embedding pipeline, FAISS (or Pinecone) index, query endpoint with LLM synthesis. | Scope to single-video queries for MVP; design schema for cross-video. |
-| 5. Frontend | 4 days | Cursor | React dashboard: video player, timeline viz, chat panel. | Prioritize: video + transcript + divergence timeline, then RAG chat. |
-| 6. Demo data + polish | 3 days | Both | Ingest 3–5 (or 10–15) public videos; **scripted demo narrative** (e.g. "Watch this spike when they discuss margins"); README; demo video. | Pick videos with clear divergence moments. |
+| Phase | Duration | Output | Notes |
+|-------|----------|--------|--------|
+| 1. Pipeline scaffolding | 3 days | FastAPI skeleton, Docker, storage (MinIO/SQLite), ingestion endpoint | **Done.** Local + MinIO storage; SQLite for metadata. |
+| 2. Modality processors | 5–6 days | Whisper → transcript; emotion model → vocal; MediaPipe + FER → facial; per-utterance JSON | Transcript first, then vocal, then facial; off-the-shelf emotion model for demo. |
+| 3. Divergence engine | 2 days | Rule-based score + flags; timeline generation | Shared-embedding option later. |
+| 4. RAG layer | 2–3 days | Embedding pipeline, FAISS/Pinecone index, query endpoint with LLM | Single-video first; schema ready for cross-video. |
+| 5. Frontend | 4 days | React dashboard: video player, timeline, RAG chat | Timeline and transcript first, then chat. |
+| 6. Demo data + polish | 3 days | 3–5 (or 10–15) public videos, scripted demo narrative, README, demo video | Videos chosen for clear divergence moments. |
 
-**Total:** ~3 weeks for full system; ~2 weeks for MVP 1 (two modalities + basic divergence).
+**Total:** ~3 weeks for full system; ~2 weeks for MVP 1.
 
 ---
 
 ## Data Sources for Demo
 
-Public and impressive:
-
-- **Earnings calls:** YouTube (e.g. Apple, Tesla — Tesla often very expressive).
-- **Congressional testimony:** C-SPAN (public domain).
-- **Press conferences:** White House, NASA, etc.
-- **Veteran interviews** (with consent) — if applicable to your story.
-
-Pre-load **3–5 videos with known divergence moments** for the core demo; optionally expand to 10–15 for breadth.
+Public sources: earnings calls (YouTube — e.g. Apple, Tesla), congressional testimony (C-SPAN), press conferences (White House, NASA). Optional: veteran or other interviews with consent. Core demo: 3–5 videos with known divergence moments; optional expansion to 10–15.
 
 ---
 
 ## Resume and Portfolio
 
-- **Repo:** Single README with: problem, approach (three modalities → divergence), architecture diagram, demo link, **Limitations & ethics**.
-- **Demo video:** 2–3 minutes: upload a clip → show timeline with one clear divergence spike → one RAG query → result with timestamp.
-- **Tech stack line:** e.g. *"Python (FastAPI, Whisper, PyTorch), React, vector search (FAISS/Pinecone), Docker."*
+- **Repo:** README with problem, approach (three modalities → divergence), architecture, demo link, Limitations & ethics.
+- **Demo video:** 2–3 minutes — upload clip, show timeline with one clear divergence spike, run one RAG query, show result with timestamp.
+- **Tech stack:** Python (FastAPI, Whisper, PyTorch), React, vector search (FAISS/Pinecone), Docker.
 
 ---
 
-## Summary of Suggestions Implemented
+## Design Decisions (Summary)
 
-- **Divergence:** Rule-based + aggregate score for MVP; shared-embedding as roadmap.
-- **Vocal baseline:** Rolling baseline (or manual calm segment); documented limitation.
-- **Facial:** 2 FPS for MVP; optional high-sensitivity mode noted.
-- **RAG:** Schema and index designed for cross-video (video_id, speaker_id, segment); single-video first in MVP.
-- **MVP phasing:** MVP1 (2 modalities), MVP2 (facial + 3-way), MVP3 (compare, export).
-- **Ethics:** Consent and limitations section; bias disclaimer.
-- **Demo data:** 3–5 videos with clear divergence moments; scripted demo narrative.
-- **Commercial:** Free tier, sharper one-liner, data feed as future; focus on platform/API/dashboard.
-- **Build plan:** MinIO/SQLite option; ordered modality work; off-the-shelf emotion model; failure modes and partial results.
-- **New sections:** Core data schema, API design (request/response), failure modes and partial results.
-- **Resume:** README contents, demo video length, tech stack line.
+- **Divergence:** Rule-based aggregate score for MVP; shared-embedding on roadmap.
+- **Vocal baseline:** Rolling baseline (or manual calm segment) instead of first 60 seconds; limitation documented.
+- **Facial:** 2 FPS for MVP; optional high-sensitivity mode for short segments.
+- **RAG:** Index designed for cross-video (video_id, speaker_id, segment); single-video queries first in MVP.
+- **Ethics:** Consent and limitations section; bias disclaimer in product and docs.
+- **Demo:** 3–5 videos with clear divergence moments; scripted narrative for the demo.
+- **Commercial:** Free tier for adoption; data feed positioned as future monetization; focus on platform, API, and dashboard for the resume project.
